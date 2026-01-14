@@ -61,10 +61,15 @@ impl CpuClk {
     }
 }
 
+/// Configuration for an internal clock (IC) divider.
+///
+/// Used for configuring XSPI kernel clocks (IC3 for XSPI1, IC4 for XSPI2).
 #[derive(Clone, Copy, PartialEq)]
 pub struct IcConfig {
-    source: Icsel,
-    divider: Icint,
+    /// Clock source selection (PLL1, PLL2, etc.)
+    pub source: Icsel,
+    /// Divider value (1-256)
+    pub divider: Icint,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -129,6 +134,11 @@ pub struct Config {
     pub pll3: Option<Pll>,
     pub pll4: Option<Pll>,
 
+    /// IC3 kernel clock configuration (used by XSPI1)
+    pub ic3: Option<IcConfig>,
+    /// IC4 kernel clock configuration (used by XSPI2)
+    pub ic4: Option<IcConfig>,
+
     pub ahb: AhbPrescaler,
     pub apb1: ApbPrescaler,
     pub apb2: ApbPrescaler,
@@ -155,6 +165,9 @@ impl Config {
             pll2: Some(Pll::Bypass { source: Pllsel::HSI }),
             pll3: Some(Pll::Bypass { source: Pllsel::HSI }),
             pll4: Some(Pll::Bypass { source: Pllsel::HSI }),
+
+            ic3: None,
+            ic4: None,
 
             ahb: AhbPrescaler::DIV2,
             apb1: ApbPrescaler::DIV1,
@@ -277,6 +290,34 @@ fn init_clocks(config: Config, input: &ClocksInput) -> ClocksOutput {
     RCC.cfgr().modify(|w| w.set_syssw(syssw));
     // wait for changes to be applied
     while RCC.cfgr().read().syssws() != Syssws::from_bits(config.sys.to_bits()) {}
+
+    // IC3 configuration (XSPI1 kernel clock)
+    debug!("configuring IC3");
+    if let Some(ic3) = config.ic3 {
+        if !pll_sources_ready(RCC.iccfgr(2).read().icsel().to_bits(), ic3.source.to_bits()) {
+            panic!("IC3 clock switch requires both origin and destination clock source to be active")
+        }
+
+        RCC.iccfgr(2).write(|w| {
+            w.set_icsel(ic3.source);
+            w.set_icint(ic3.divider);
+        });
+        RCC.divensr().modify(|w| w.set_ic3ens(true));
+    }
+
+    // IC4 configuration (XSPI2 kernel clock)
+    debug!("configuring IC4");
+    if let Some(ic4) = config.ic4 {
+        if !pll_sources_ready(RCC.iccfgr(3).read().icsel().to_bits(), ic4.source.to_bits()) {
+            panic!("IC4 clock switch requires both origin and destination clock source to be active")
+        }
+
+        RCC.iccfgr(3).write(|w| {
+            w.set_icsel(ic4.source);
+            w.set_icint(ic4.divider);
+        });
+        RCC.divensr().modify(|w| w.set_ic4ens(true));
+    }
 
     // decreasing dividers
     debug!("configuring decreasing pclk dividers");
@@ -1055,6 +1096,8 @@ pub(crate) unsafe fn init(config: Config) {
         per: None,
         rtc: None,
         i2s_ckin: None,
+        ic3: None, // XSPI1 kernel clock - TODO: calculate from config.ic3
+        ic4: None, // XSPI2 kernel clock - TODO: calculate from config.ic4
         ic8: None,
         ic9: None,
         ic10: None,

@@ -286,7 +286,8 @@ impl<'d, T: Instance, M: PeriMode> Xspi<'d, T, M> {
         width: XspiWidth,
         dual_quad: bool,
     ) -> Self {
-        // Enable the interface
+        // Enable the interface (H7RS only - N6 doesn't have PWR XSPIM enable bits)
+        #[cfg(pwr_h7rs)]
         match T::SPI_IDX {
             1 => crate::pac::PWR.csr2().modify(|r| r.set_en_xspim1(true)),
             2 => crate::pac::PWR.csr2().modify(|r| r.set_en_xspim2(true)),
@@ -296,7 +297,10 @@ impl<'d, T: Instance, M: PeriMode> Xspi<'d, T, M> {
         #[cfg(xspim_v1)]
         {
             // RCC for xspim should be enabled before writing register
+            #[cfg(rcc_h7rs)]
             crate::pac::RCC.ahb5enr().modify(|w| w.set_iomngren(true));
+            #[cfg(rcc_n6)]
+            crate::pac::RCC.ahb5enr().modify(|w| w.set_xspimen(true));
 
             // Disable XSPI peripheral first
             T::REGS.cr().modify(|w| {
@@ -900,6 +904,63 @@ impl<'d, T: Instance> Xspi<'d, T, Blocking> {
             false,
         )
     }
+
+    /// Create new blocking XSPI driver for 16-bit hexadeca-spi external chips
+    pub fn new_blocking_xspi_hexa(
+        peri: Peri<'d, T>,
+        clk: Peri<'d, impl CLKPin<T>>,
+        d0: Peri<'d, impl D0Pin<T>>,
+        d1: Peri<'d, impl D1Pin<T>>,
+        d2: Peri<'d, impl D2Pin<T>>,
+        d3: Peri<'d, impl D3Pin<T>>,
+        d4: Peri<'d, impl D4Pin<T>>,
+        d5: Peri<'d, impl D5Pin<T>>,
+        d6: Peri<'d, impl D6Pin<T>>,
+        d7: Peri<'d, impl D7Pin<T>>,
+        d8: Peri<'d, impl D8Pin<T>>,
+        d9: Peri<'d, impl D9Pin<T>>,
+        d10: Peri<'d, impl D10Pin<T>>,
+        d11: Peri<'d, impl D11Pin<T>>,
+        d12: Peri<'d, impl D12Pin<T>>,
+        d13: Peri<'d, impl D13Pin<T>>,
+        d14: Peri<'d, impl D14Pin<T>>,
+        d15: Peri<'d, impl D15Pin<T>>,
+        ncs: Peri<'d, impl NCSEither<T>>,
+        config: Config,
+    ) -> Self {
+        Self::new_inner(
+            peri,
+            new_pin!(d0, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d1, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d2, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d3, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d4, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d5, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d6, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d7, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d8, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d9, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d10, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d11, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d12, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d13, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d14, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d15, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(clk, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            ncs.sel(),
+            new_pin!(
+                ncs,
+                AfType::output_pull(OutputType::PushPull, Speed::VeryHigh, Pull::Up)
+            ),
+            None,
+            None,
+            None,
+            None,
+            config,
+            XspiWidth::HEXA,
+            false,
+        )
+    }
 }
 
 impl<'d, T: Instance> Xspi<'d, T, Async> {
@@ -1133,6 +1194,64 @@ impl<'d, T: Instance> Xspi<'d, T, Async> {
             new_dma!(dma),
             config,
             XspiWidth::OCTO,
+            false,
+        )
+    }
+
+    /// Create new async XSPI driver for 16-bit hexadeca-spi external chips
+    pub fn new_xspi_hexa(
+        peri: Peri<'d, T>,
+        clk: Peri<'d, impl CLKPin<T>>,
+        d0: Peri<'d, impl D0Pin<T>>,
+        d1: Peri<'d, impl D1Pin<T>>,
+        d2: Peri<'d, impl D2Pin<T>>,
+        d3: Peri<'d, impl D3Pin<T>>,
+        d4: Peri<'d, impl D4Pin<T>>,
+        d5: Peri<'d, impl D5Pin<T>>,
+        d6: Peri<'d, impl D6Pin<T>>,
+        d7: Peri<'d, impl D7Pin<T>>,
+        d8: Peri<'d, impl D8Pin<T>>,
+        d9: Peri<'d, impl D9Pin<T>>,
+        d10: Peri<'d, impl D10Pin<T>>,
+        d11: Peri<'d, impl D11Pin<T>>,
+        d12: Peri<'d, impl D12Pin<T>>,
+        d13: Peri<'d, impl D13Pin<T>>,
+        d14: Peri<'d, impl D14Pin<T>>,
+        d15: Peri<'d, impl D15Pin<T>>,
+        ncs: Peri<'d, impl NCSEither<T>>,
+        dma: Peri<'d, impl XDma<T>>,
+        config: Config,
+    ) -> Self {
+        Self::new_inner(
+            peri,
+            new_pin!(d0, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d1, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d2, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d3, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d4, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d5, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d6, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d7, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d8, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d9, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d10, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d11, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d12, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d13, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d14, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(d15, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            new_pin!(clk, AfType::output(OutputType::PushPull, Speed::VeryHigh)),
+            ncs.sel(),
+            new_pin!(
+                ncs,
+                AfType::output_pull(OutputType::PushPull, Speed::VeryHigh, Pull::Up)
+            ),
+            None,
+            None,
+            None,
+            new_dma!(dma),
+            config,
+            XspiWidth::HEXA,
             false,
         )
     }
@@ -1391,6 +1510,13 @@ impl SealedXspimInstance for peripherals::XSPI1 {
 impl SealedXspimInstance for peripherals::XSPI2 {
     const SPIM_REGS: Xspim = crate::pac::XSPIM;
     const SPI_IDX: u8 = 2;
+}
+
+// XSPI3 only exists on N6, connected directly without XSPIM multiplexing
+#[cfg(all(xspim_v1, peri_xspi3))]
+impl SealedXspimInstance for peripherals::XSPI3 {
+    const SPIM_REGS: Xspim = crate::pac::XSPIM;
+    const SPI_IDX: u8 = 3;
 }
 
 #[cfg(xspim_v1)]
