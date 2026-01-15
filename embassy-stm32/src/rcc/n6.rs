@@ -933,11 +933,41 @@ fn init_osc(config: Config) -> OscOutput {
     let ic6_src = RCC.iccfgr(5).read().icsel();
     let ic11_src = RCC.iccfgr(10).read().icsel();
 
+    // If config wants a non-IC1 CPU source (HSI/HSE/MSI), switch now before
+    // touching PLLs. This prevents panicking when trying to reconfigure a PLL
+    // that's currently in use by IC1.
+    let cpu_src = if cpu_src == Cpusws::IC1 && !matches!(config.cpu, CpuClk::Ic1 { .. }) {
+        // Switch CPU clock to the target source first
+        debug!("switching CPU away from IC1 before PLL reconfiguration");
+        let cpusw = Cpusw::from_bits(config.cpu.to_bits());
+        RCC.cfgr().modify(|w| w.set_cpusw(cpusw));
+        while RCC.cfgr().read().cpusws() != Cpusws::from_bits(config.cpu.to_bits()) {}
+        // Return the new CPU source
+        RCC.cfgr().read().cpusws()
+    } else {
+        cpu_src
+    };
+
+    // If config wants a non-IC2 sys source (HSI/HSE/MSI), switch now before
+    // touching PLLs. This prevents panicking when trying to reconfigure a PLL
+    // that's currently in use by IC2, IC6, or IC11.
+    let sys_src = if sys_src == Syssws::IC2 && !matches!(config.sys, SysClk::Ic2 { .. }) {
+        // Switch system clock to the target source first
+        debug!("switching sys clock away from IC2 before PLL reconfiguration");
+        let syssw = Syssw::from_bits(config.sys.to_bits());
+        RCC.cfgr().modify(|w| w.set_syssw(syssw));
+        while RCC.cfgr().read().syssws() != Syssws::from_bits(config.sys.to_bits()) {}
+        // Return the new sys source
+        RCC.cfgr().read().syssws()
+    } else {
+        sys_src
+    };
+
     for (n, (&pll, out)) in pll_configs.iter().zip(pll_outputs.iter_mut()).enumerate() {
         debug!("configuring PLL{}", n + 1);
         let pll_ready = RCC.sr().read().pllrdy(n);
 
-        if is_new_pll_config(pll, 0) {
+        if is_new_pll_config(pll, n) {
             let this_pll = Icsel::from_bits(n as u8);
 
             if cpu_src == Cpusws::IC1 && ic1_src == this_pll {
@@ -948,7 +978,7 @@ fn init_osc(config: Config) -> OscOutput {
                 panic!("PLL should not be disabled / reconfigured if used for IC2, IC6 or IC11 (sysclksrc)")
             }
 
-            *out = init_pll(pll, 0, &pll_input);
+            *out = init_pll(pll, n, &pll_input);
         } else if pll.is_some() && !pll_ready {
             RCC.csr().write(|w| w.pllons(n));
             while !RCC.sr().read().pllrdy(n) {}
