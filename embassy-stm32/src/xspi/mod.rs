@@ -58,6 +58,11 @@ pub struct Config {
     pub max_transfer: u8,
     /// Enables the refresh feature, chip select is released every refresh + 1 clock cycles
     pub refresh: u32,
+    /// Enable 1.8V mode for VddIO power domain (N6 only).
+    /// Set to true for boards with 1.8V VddIO rails (like STM32N6570-DK).
+    /// WARNING: Setting true with 3.3V hardware will damage the chip!
+    #[cfg(pwr_n6)]
+    pub vddio_1v8: bool,
 }
 
 impl Default for Config {
@@ -76,6 +81,8 @@ impl Default for Config {
             chip_select_boundary: 0, // Acceptable range 0 to 31
             max_transfer: 0,
             refresh: 0,
+            #[cfg(pwr_n6)]
+            vddio_1v8: false, // Safe default - only enables supply valid
         }
     }
 }
@@ -293,6 +300,41 @@ impl<'d, T: Instance, M: PeriMode> Xspi<'d, T, M> {
             2 => crate::pac::PWR.csr2().modify(|r| r.set_en_xspim2(true)),
             _ => unreachable!(),
         };
+
+        // N6: Enable VddIO power domain for XSPI pins
+        // XSPI1 uses Port O/P → VddIO2, XSPI2 uses Port N → VddIO3
+        #[cfg(pwr_n6)]
+        {
+            use crate::pac::pwr::vals::{Vddio2rdy, Vddio2sv, Vddio2vrsel, Vddio3rdy, Vddio3sv, Vddio3vrsel};
+
+            match T::SPI_IDX {
+                1 => {
+                    // XSPI1 uses Port O/P → VddIO2
+                    crate::pac::PWR.svmcr3().modify(|w| {
+                        w.set_vddio2sv(Vddio2sv::B_0X1); // Enable supply valid
+                        w.set_vddio2vmen(true); // Enable voltage monitoring
+                        if config.vddio_1v8 {
+                            w.set_vddio2vrsel(Vddio2vrsel::B_0X1); // 1.8V mode
+                        }
+                    });
+                    // Wait for VddIO2 to be ready
+                    while crate::pac::PWR.svmcr3().read().vddio2rdy() != Vddio2rdy::B_0X1 {}
+                }
+                2 => {
+                    // XSPI2 uses Port N → VddIO3
+                    crate::pac::PWR.svmcr3().modify(|w| {
+                        w.set_vddio3sv(Vddio3sv::B_0X1); // Enable supply valid
+                        w.set_vddio3vmen(true); // Enable voltage monitoring
+                        if config.vddio_1v8 {
+                            w.set_vddio3vrsel(Vddio3vrsel::B_0X1); // 1.8V mode
+                        }
+                    });
+                    // Wait for VddIO3 to be ready
+                    while crate::pac::PWR.svmcr3().read().vddio3rdy() != Vddio3rdy::B_0X1 {}
+                }
+                _ => {}
+            }
+        }
 
         #[cfg(xspim_v1)]
         {
