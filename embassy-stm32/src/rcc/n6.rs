@@ -1,9 +1,8 @@
 use stm32_metapac::rcc::vals::{
-    Cpusw, Cpusws, Hseext, Hsitrim, Icint, Icsel, Msifreqsel, Plldivm, Pllmodssdis, Pllpdiv, Pllsel, Syssw, Syssws,
-    Timpre,
+    Cpusw, Cpusws, Hseext, Hsitrim, Msifreqsel, Plldivm, Pllmodssdis, Pllpdiv, Pllsel, Syssw, Syssws, Timpre,
 };
 pub use stm32_metapac::rcc::vals::{
-    Hpre as AhbPrescaler, Hsidiv as HsiPrescaler, Hsitrim as HsiCalibration, Ppre as ApbPrescaler,
+    Hpre as AhbPrescaler, Hsidiv as HsiPrescaler, Hsitrim as HsiCalibration, Icint, Icsel, Ppre as ApbPrescaler,
 };
 
 use crate::pac::{PWR, RCC, SYSCFG};

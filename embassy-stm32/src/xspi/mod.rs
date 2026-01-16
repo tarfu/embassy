@@ -302,20 +302,29 @@ impl<'d, T: Instance, M: PeriMode> Xspi<'d, T, M> {
             #[cfg(rcc_n6)]
             crate::pac::RCC.ahb5enr().modify(|w| w.set_xspimen(true));
 
-            // Disable XSPI peripheral first
+            // N6: Enable XSPI peripheral clock FIRST (bus fault if accessed without clock)
+            #[cfg(rcc_n6)]
+            rcc::enable_and_reset::<T>();
+
+            // Disable XSPI peripheral
             T::REGS.cr().modify(|w| {
                 w.set_en(false);
             });
 
-            // XSPI IO Manager has been enabled before
+            // Configure XSPI IO Manager
             T::SPIM_REGS.cr().modify(|w| {
                 w.set_muxen(false);
                 w.set_req2ack_time(0xff);
             });
+
+            // H7RS: Enable XSPI clock after initial config (original sequence)
+            #[cfg(rcc_h7rs)]
+            rcc::enable_and_reset::<T>();
         }
 
-        // System configuration
+        #[cfg(not(xspim_v1))]
         rcc::enable_and_reset::<T>();
+
         while T::REGS.sr().read().busy() {}
 
         // Device configuration
